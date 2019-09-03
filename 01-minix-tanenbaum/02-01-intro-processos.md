@@ -32,3 +32,39 @@
   * Início de tarefa em lote
 * **Daemons**: processos que ficam em segundo plano para lidar com alguma atividade
 * `ps`: no MINIX lista os processos em execução
+* Única chamada para criação de processos é o `fork`
+  * Clone do processo que invoca, com a mesma imagem de memória. Processo filho deve executat `execve` para executar um novo programa
+  * Porém, pai e filho tem espaços de memórias distintos, alterações em um não alteram o outro
+
+
+
+### 2.1.3 - Término de Processo
+
+* Condições de término
+  * Saída normal (voluntária)
+    * Termina por executar sua tarefa, chamada de `exit`
+  * Saída por erro (voluntária)
+    * Exemplo de passar um arquivo que não existe para um compilador
+  * Erro fatal (involuntário)
+    * Bug no programa: divisão por zero, referência a endereço que não existe
+  * Morto por outro processo (involuntário)
+    * Chamada de `kill`
+
+
+
+### 2.1.4 - Hierarquia de Processos
+
+* Grupo de processos: um processo, seus filhos e demais descendentes
+* Dois processo especiais na inicialização de MINIX
+  * **Servidor de reencarnação**: (re)inicia drivers e servidores
+  * **Init**: executa o script em `/etc/rc` que gera comandos para o servidor de reencarnação iniciar drivers e servidores não presentes na imagem de boot. Dessa maneira, tais drivers e servidores tornam-se filhos do servidor de reencarnação, então se eles forem encerrados, o servidor de reencarnação será informado e irá reiniciá-los
+    * Permite que MINIX 3 tolere falha de driver ou servidor, porque um novo será iniciado automaticamente
+    * Após a execução de `/etc/rc`, `init` lê o arquivo de configuração `/etc/ttytab` para checar terminais existentes, fazendo `fork` do processo `getty` para cada um, mostrando prompt de login e aguardando entrada
+    * Ao digitar um nome, `getty` dá `exec` em um processo de login com o mesmo nome como argumento
+      * Sucedendo o login, `login` dá `exec` na shell do usuário, que se torna filha de `init`
+    * Exemplo acima de como árvores de processos são criadas
+
+
+
+### 2.1.5 - Estados de Processo
+
