@@ -68,3 +68,93 @@
 
 ### 2.1.5 - Estados de Processo
 
+* Necessidade de comunicação entre processos
+  * Em um caso de pipe como `cat chapter1 chapter2 chapter3 | grep tree` pode ocorrer que o `grep` esteja pronto para executar mas que a input fornecida pelo output do `cat` ainda não esteja, portanto precisa ser **bloqueado**
+* Três estados de um processo
+  * Executando (usando a CPU no instante em questão)
+  * Pronto (passível de execução, parado para execução de outro processo)
+  * Bloqueado (indisponível até certo evento externo ocorrer)
+* Transições entre estados
+  * Executando para Bloqueado: processo bloqueia aguardando input
+    * Ocorre quando o processo descobre que não consegue continuar
+  * Executando para Pronto: escalonador escolhe outro process
+  * Pronto para Executando: escolhido pelo escalonador
+  * Bloqueado para disponível: input torna-se disponível
+    * Se nenhum outro processo estiver rodando, pode-se transicionar direto para o estado de Execução
+* O nível mais baixo do SO é o escalonador, com vários processos em cima. Todas interrupções e detalhes de execução do processo estão escondidos nele
+
+### 2.1.6 - Implementação de Processos
+
+* **Tabela de processos**: mantida pelo SO, array de estruturas. Uma entrada por processo (entradas são **blocos de controle de processo**)
+  * Entradas contém informações sobre o estado do processo, o program counter, stack pinter, alocação de memória, estado dos arquivos abertos, informações de contabilidade e escalonamento, alarmes, sinais, e tudo mais que precisa ser salvo referente ao processo quando ele transiciona de *executando* para *pronto*, permitindo que seja reiniciado depois como se nunca tivesse parado
+* Em MINIX 3, comunicação entre processos, gerenciamento de memória e gerenciamento de arquivos são gerenciados por módulos separados dentro do sistema, particionadno a tabela de processo, onde cada módulo mantém o campo necessários a ele
+* **Campos da tabela de processos por módulo**
+  * **Kernel** (campos ligados a esse capítulo)
+    * Registradores
+    * Program Counter
+    * Palavra de status do programa
+    * Stack pointer
+    * Estado do processo
+    * Prioridade de escalonamento atual
+    * Prioridade de escalonamento
+    * Tiques de escalonamento restantes
+    * Tamanho do quantum
+    * Tempo de CPU usado
+    * Ponteiros da fila de mensagens
+    * Bits de sinais pendentes
+    * Bits de flags
+    * Nome do processo
+  * **Gerenciamento de processos**
+    * Ponteiro para segmento de texto
+    * Ponteiro para segmento de dados
+    * Ponteiro para segmento bss
+    * Status de saída
+    * Status de sinal
+    * ID do processo
+    * Processo pai
+    * Grupo do processo
+    * Tempo de CPU dos filhos
+    * UID real
+    * UID efetivo
+    * GID real
+    * GID efetivo
+    * Informação de arquivo para compartilhamento de texto
+    * Mapas de bits de sinais
+    * Bits de flag
+    * Nome do processo
+  * **Gerenciamento de arquivo**
+    * Máscara UMASK
+    * Diretório raiz
+    * Diretório de trabalho
+    * Descritores de arquivo
+    * ID real
+    * UID efetivo
+    * GID real
+    * GID efetivo
+    * tty de controle
+    * Área de salvamento para leitura e escrita
+    * Parâmetros da chamada de sistema
+    * Bits de flag
+* **Tabela de descritores de interrupção**: estrutura de dados associada a cada classe de dispositivo de entrada ou saída
+  * Cada entrada nessa tabela possui um **vetor de interrupção**: contém o endereço do procedimento de tratamento do serviço de interrupção
+    * Um exemplo é se o processo de usuário 23 está executando e ocorre uma interrupção de disco. O program counter, palavra de status do programa e registradores necessários são empurrados para a stackk atual pelo hardware de interrupção. O computador então salta para o endereço especificado no vetor de interrupção de disco e daí em diante o resto é gerido por software
+    * O procedimento de tratamento da interrupção salva todos registradores na entrada da tabela de processos referente ao processo atual, sendo que o número de processo atual e um ponteiro para sua entrada na tabela de processos já estã salvos em variáves globais para rápido acesso
+    * Depois, a informação depositada pela interrupção é removida da pilha, e o ponteiro da pilha é configurado a uma pilha temporária usada pela rotina de tratamento de processos
+    * Ações como salvar registradores e configurar o ponteiro da pilha não podem ser expressas em linguagens de alto nível, portanto são executadas por uma rotina em Assembly. Quando essa rotina se encerra, chamada uma rotina em C para lidar com o resto do trabalho da interrupção
+* No MINIX 3, processos se comunicam por mensagens
+  * Portanto, o próximo passo na interrupção é construir uma mensagem para o processo do disco, que estará bloqueado aguardando por essa mensagem
+  * Tal mensagem informa que uma interrupção ocorreu, diferenciando de mensagens de processos de usuários que requisitem acesso à leitura de blocos do disco
+  * O estado do processo de disco se altera de *bloqueado* para *pronto* e o escalonador é chamado
+* No MINIX 3, processos podem ter prioridades diferentes, para melhor suprir dispositivos de entrada e saída que processos de usuários, como um exemplo
+  * Após a invocação do escalonador quando o processo do disco torna-se pronto, se ele tem a maior prioridade, será executado. Se o processo inicialmente interrompido tem a mesma ou mais prioridade, o processo de disco irá aguardar
+* Após tudo isso, finalmente, a rotina em Assembly carrega os registradores e o mapa da memória para o processo atual e o executa
+* **Resumo de uma interrupção pelo nível mais baixo do SO**
+  1. Hardware empilha o program counter
+  2. Harware carrega o novo program counter a partir do vetor de interrupção
+  3. Rotina assembly salva os registradores
+  4. Rotina assembly configura a nova pilha
+  5. O serviço de interrupção em C constrói e envia a mensagem
+  6. Código de passagem de mensagem mark como o destinário aguardando a mensagem como pronto
+  7. O escalonador decidade qual processo rodar a seguir
+  8. A rotina em C retorna para o código em Assembly
+  9. A rotina em Assembly inicia o novo processo a ser executado
