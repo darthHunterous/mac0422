@@ -158,3 +158,43 @@
   7. O escalonador decidade qual processo rodar a seguir
   8. A rotina em C retorna para o código em Assembly
   9. A rotina em Assembly inicia o novo processo a ser executado
+
+### 2.1.7 - Threads
+
+* Cada processo tem um espaço de endereçamento e uma única thread de controle. Em alguns casos pode ser desejável ter múltiplas threads de controle no mesmo espaço de endereçamento rodando quase em paralelo, como se fossem processos separados
+  * A tais fluxos de controles chamam-se **threads** ou **processos leves**
+* Um processo é uma forma de agrupar recursos relacionados juntos
+  * Possui espaço de endereçamento contendo texto do programa e dados, como outros recursos (arquivos abertos, processos filhos, alarm, rotinas de tratamento de sinais, etc)
+* Outro conceito de um processo é o de seu fluxo de controle (**thread**)
+  * A thread possui um program counter que guarda a próxima instrução a ser executada, possui registradores para suas variáveis de trabalho atuais. Possui uma pilha, com o histórico de execução, com um frame para cada procedimento chamado não retornado ainda
+* São conceitos diferentes embora uma thread precise ser executada em um processo
+  * Procesos são usada para agrupar recursos
+  * Threadas são entidades programadas para execução na CPU
+* Threads adicionam ao modelo de processos a capacidade de várias execuções no mesmo ambiente de processo, de forma independente umas das outras
+* Comparação entre 3 processos, cada qual com sua thread e 1 processo possuindo 3 threads
+  * Embora em ambos tenhamos 3 threads, no primeiro caso cada uma opera em um espaço de endereçamento diferente enquanto que no segundo caso compartilham o mesmo espaço
+* Exemplo de uso de várias threads é na requisição de várias images por um browser. Para cada imagem, o browser precisa requisitar ao servidor, configurando uma conexão e efetuando a requisição. Muito tempo se gasta para estabelecer e encerrar tais conexões, portanto com várias threads em um processo, várias imagens podem ser requisitidas ao mesmo tempo, acelerando a performance, pois o fator limitante é o tempo de estabelecimento de conexão e não a velocidade de transmissão
+* Alguns dos campos na tabela de processos do MINIX na verdade são por threads, portanto faz-se necessária uma tabela de threads separada, com uma entrada para armazenar as informações de cada thread
+  * **Informações sobre itens compartilhados por threads em um processo**
+    * Espaço de endereçamento
+    * Variáveis globais
+    * Arquivos abertos
+    * Processos filhos
+    * Alarmes pendentes
+    * Sinais e rotinas de tratamento de sinais
+    * Informações de contabilização
+  * **Campos de informações sobre itens privados a cada thread**
+    * Program counter
+      * Necessário por thread, pois cada uma pode ser suspensa e resumida assim como processos
+    * Registradores
+      * Necessários por thread pois quando uma é suspensa, seus registradores precisam ser salvos nesses campos da tabela
+    * Pilha
+    * Estado
+* Threads como processos podem estar em *execução*, *pronta* ou *bloqueadas*
+* Em alguns SOs, threads são gerenciadas no espaço do usuário e não pelo SO em si. Quando a thread vai ser bloqueada, ela escolhe seu sucessor antes de parar
+  * Exemplo de **POSIX P-threads** e **Mach C-threads**
+* Quando o SO gerencia as threads por procesos, cabe ao escalonador decidir qual thread será executada após uma ser bloqueada. Para isso o kernel possui uma tabela de threads análoga à tabela de processos
+* Trocar threads é mais rápido quando elas são gerenciadas no espaço do usuário, pois evitam-se chamadas de sistema. Porém quando uma thread é bloqueada por aguardar entrada/saída ou tratamento de um erro, o kernel bloqueia todo o processo pois desconhece a existência das threads
+* Threads desvinculadas do sistema causam uma série de problemas, como se um `fork` deve replicar as várias threads do pai em um filho. Caso não sejam replicadas, o processo pode não funcionar corretamente, mas sendo replicadas no filho, o que ocorreria se uma thread bloqueasse aguardando input do teclado? Tanto o pai quanto o filho recebem a entrada?
+  * Se uma thread faz um chamada de sistema, o status da chamada é colocado na variável global `errno`, mas o que ocorre se outra thread fazer uma outra chamada antes que a primeira tenha sido capaz de ler o valor retornado?
+  * Tais problemas indicam que introduzir threads em um sistema sem pensar em um redesenhamento dele irá causar muitos problemas
