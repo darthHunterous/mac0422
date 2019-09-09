@@ -154,7 +154,7 @@
   3. Rotina assembly salva os registradores
   4. Rotina assembly configura a nova pilha
   5. O serviço de interrupção em C constrói e envia a mensagem
-  6. Código de passagem de mensagem mark como o destinário aguardando a mensagem como pronto
+  6. Código de passagem de mensagem marca o destinário aguardando a mensagem como pronto
   7. O escalonador decidade qual processo rodar a seguir
   8. A rotina em C retorna para o código em Assembly
   9. A rotina em Assembly inicia o novo processo a ser executado
