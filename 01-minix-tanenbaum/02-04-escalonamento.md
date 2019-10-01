@@ -205,3 +205,8 @@
 * Tipos de escalonamento para sistemas em tempo real
   * **Estático**: decisões de escalonamento antes do sistema estar rodando
   * **Dinâmico**: decisões de escalonamento em tempo de execução
+
+## 2.4.5 - Política versus mecanismo
+
+* 
+
