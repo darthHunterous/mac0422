@@ -208,5 +208,35 @@
 
 ## 2.4.5 - Política versus mecanismo
 
-* 
+* **Problema**: alguns escalonadores não aceitam informações diretamente dos processos sobre decisões de escalonamento, sendo que o processo principal muitas vezes faz ideia de qual dos seus filhos é mais importante (ou os mais críticos em relação ao tempo)
+* **Solução**: separar o **mecanismo de escalonamento** da **política de escalonamento**
+  * Parametrizar o algoritmo de escalonamento, com os processos de usuários preenchendo tais parâmetros
+* Exemplo do kernel usar um algoritmo de escalonamento de prioridade mas fornecer uma chamada para que um processo possa alterar a prioridade de seus filhos, permitindo que o pai controle como seus filhos são escalonados
+  * Mecanismo no kernel mas a política é configurada pelo processo
+
+## 2.4.6 - Escalonamento de threads
+
+* Vários processos com múltiplas threads
+  * Dois níveis de paralelismo: processos e threads
+* Escalonamento diferente para threads a nível de usuário e a nível de Kernel
+
+### Threads a nível de usuário
+
+* Kernel não sabe da existência de threads, pega um processo e deixa rodar seu quantum
+* O escalonador de threads decide qual rodar, podendo ela executar quanto quiser e consumir todo o quantum do processo. Quando o processo volta a ser escalonado, a mesma threads continua rodando, consumindo todo o tempo do processo até que a thread termine
+* **Exemplo**: processo com 3 threads, cada um com `5ms` de trabalho e o processo com `50ms` de quantum
+  * Sem conhecimento a nível de Kernel sobre as threads, elas podem acabar sofrendo rodízio de **A1** a **A3**, com 10 trocas
+  * Se as threads fossem de conhecimento do sistema, o rodízio poderia ser feito com as threads de outro processo, **B**
+
+### Threads a nível de kernel
+
+* Cada thread recebe um quantum
+* Permite rodízio intercalando threads de cada processo
+
+### Diferenças
+
+* **Performance**: trocar de thread a nível de usuário é mais rápido que trocar de thread a nível de kernel, pois requer uma troca de contexto completa, mudança de mapa de memória e invalidação do cache
+  * Pode ser levado em conta para o escalonamento: com duas threads de mesma prioridade, é melhor priorizar aquela que pertence ao mesmo processo
+* Com threads a nível de kernel, uma thread bloquear por entrada/saída não suspende todo o processo
+* Com threads a nível de usuário, pode-se aplicar um escalonador de threads específico para uma dada aplicação, capazes de ajustar uma aplicação melhor do que o kernel
 
