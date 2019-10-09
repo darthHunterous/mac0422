@@ -103,3 +103,71 @@
 
 ## 2.5.2 - Gerenciamento de processos em MINIX 3
 
+* Todos processos de usuário são parte de uma árvore de processos com `init` na raiz
+* Alguns servidores e drivers precisam ser iniciados antes mesmo do `init`
+
+### Inicialização do MINIX 3
+
+* **Hierarquia do disco de boot**: ordem para se tentar o boot
+  * **Ordem**
+    * Disquete
+    * CD-ROM
+    * Primeiro HD
+  * Pode ser configurada na BIOS
+* **Disquete como disco de boot**: lê o primeiro setor da primeira trilha do disquete (512 bytes) que contém o programa **bootstrap** (de **inicialização**)
+  * O bootstrap do MINIX 3 carrega um programa maior, `boot`que carrega o SO em si
+* **Disco rígido como boot**: passo intermediário
+  * HD dividido em **partições**. O primeiro setor contém um programa e a **tabela de partição** do disco, que juntas formam o **registro de inicialização mestre** (**master boot record**)
+    * O programa lê a tabela e seleciona a **partição ativa**, que contém um bootstrap no primeiro setor, que é carregado e executado para encontrar o programa `boot`na partição, assim como no disquete
+* **CD-ROM como boot**: capaz de carregar um grande bloco de dados na memória imediatamente (geralmente uma cópia exata do disquete bootável, **RAM disk**)
+  * Transfere-se o controle para o RAM disk e o boot prossegue como se houvesse um disquete físico
+* **Imagem de boot**: programa `boot` procura por arquivos no disquete ou partição e os carrega nas posições adequadas de memória
+  * Partes mais importantes: kernel, gerenciador de processos e sistema de arquivos
+  * Outros programas: servidor de reencarnação, disco de RAM, console, drivers de log e `init`
+  * O servidor de reencarnação precisa ser parte da imagem de boot para dar prioridades e privilégios a processos comuns carregados após a inicialização, de maneira a transformá-los em processos do sistema
+  * `tty` e `log` são opcionais pois é útil mostrar mensagens no console e armazenar logs no processo de inicialização
+  * `init` pode ser carregado depois mas controla configuração inicial do sistema e é útil ter na imagem de boot
+* Após o carregamento, o kernel completo começa sua execução
+  * Kernel inicializa as tarefas do sistema e de relógio, depois o gerenciador de processos e sistema de arquivos
+  * Depois, o gerenciador de processos e o sistema de arquivos cooperam em inicializar servidores e drivers que são parte da imagem de boot. Quando todos executaram e inicializaram, bloqueiam aguardando algo a fazer
+  * O escalonamento de MINIX 3 prioriza processos
+  * Quando todas tarefas, drivers e servidores carregados na imagem de boot bloquearam, o primeiro processo de usuário, `init` é executado
+
+### Componentes do sistema MINIX 3
+
+| Component | Description                               | Carregado por: |
+| --------- | ----------------------------------------- | -------------- |
+| kernel    | kernel e tarefas de relógio e sistema     | imagem de boot |
+| pm        | gerenciador de processos                  | imagem de boot |
+| fs        | sistema de arquivos                       | imagem de boot |
+| rs        | reinicia servidores e drivers             | imagem de boot |
+| memory    | driver do disco de RAM                    | imagem de boot |
+| log       | buffer da saída do log                    | imagem de boot |
+| tty       | driver do console e do teclado            | imagem de boot |
+| driver    | driver do disco                           | imagem de boot |
+| init      | pai de todos processos de usuário         | imagem de boot |
+| floppy    | driver do disquete (se bootado do HD)     | /etc/rc        |
+| is        | servidor de informação (debug)            | /etc/rc        |
+| cmos      | configura a data a partir do relógio CMOS | /etc/rc        |
+| random    | gerador de números aleatórios             | /etc/rc        |
+| printer   | driver de impressora                      | /etc/rc        |
+
+
+
+### Inicialização da árvore de processos
+
+* `init` é o primeiro processo de usuário e o último processo carregado na imagem de boot
+* A construção da árvore de processos não começa com `init`
+  * As tarefas `CLOCK` e `SYSTEM` já estão rodando, mas são rodados dentro do kernel e não visíveis fora dele. Não recebem PID e não são parte de árvore de processos alguma
+  * O gerenciador de processo é o primeiro a rodar no espaço do usuário, recebe PID zero e não é filho ou pai de qualquer outro processo
+  * Servidor de reencarnação é feito pai de todos outros processos inicializados na imagem de boot (drivers e servidores), pois precisa ser informado da necessidade de reiniciar algum desses processos
+* `init` recebe PID `1`
+  * É feito filho do servidor de reencarnação
+  * `init` executa o script **/etc/rc** que inicia drivers e servidores adicionais, que não são parte da imagem de boot
+    * Qualquer programa iniciado por esse script vira filho de init
+    * Um dos primeiros programas é `service`, interface do usuário com o servidor de reencarnação
+    * Servidor de reencarnação inicia programas comuns e converte em processos do sistema
+      * `floppy`(se não usado para bootar)
+      * `cmos` (relógio)
+      * `is` (servidor de informação para debug produzidos ao apertar as teclas F1, etc no teclado do console)
+      * SR adota todos processos do sistema como filhos exceto o gerenciador de processos
