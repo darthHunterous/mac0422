@@ -72,4 +72,5 @@
   * Previne que processos de alta prioridade travem o sistema
   * Um processo que previne outros de serem rodados podem ser movidos para uma fila de menor prioridade temporariamente
 
-### 2.6.11 - Suporte de Kernel dependente do hardware
+## 2.6.11 - Suporte de Kernel dependente do hardware
+

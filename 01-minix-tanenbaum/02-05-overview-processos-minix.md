@@ -171,3 +171,59 @@
       * `cmos` (relógio)
       * `is` (servidor de informação para debug produzidos ao apertar as teclas F1, etc no teclado do console)
       * SR adota todos processos do sistema como filhos exceto o gerenciador de processos
+
+## 2.5.3 - Comunicação Interprocessos MINIX 3
+
+* Funções para envio de mensagens
+	* `send(dest, &message)`: envia mensagem para `dest`
+	* `receive(source, &message)`: recebe mensagem do processo `source`
+	* `sendrec(src_dst, &message)`: envia a mensagem e aguarda resposta do mesmo processo
+  	* A resposta sobreescreve a mensagem
+* Fluxo de mensagens é em geral para camadas inferiores, mas podem ser entre processos na mesma camada ou camadas adjacentes
+* Processos de usuário não podem trocar mensagens
+* Quando um processo envia mensagem para outro que não estava esperando, o remetente bloqueia até que o destinatário chama um `receive` para o remetente
+  * Elimina problemas ao não precisar lidar com buffer
+  * O destinatário precisa enviar um `receive` e não tentar um `send` para o remetente, pois senão ambos ficarão bloqueados e ocorrerá deadlock
+* Primitiva diferente da passagem de mensagens (diferente da mensagem de bloqueio)
+  * `notify(dest)`: faz outro processo notar que algo importante aconteceu
+    * Não bloqueia, evita deadlock por mensagem
+    * Mensagem composta pelo id de quem enviou e uma timestamp
+    * Usada também pelo teclado quando F1 a F12 ou shift + F1 a F12 é apertada
+    * Notificação que ainda não pode ser recebida pode ser facilmente armazenada para ser informado quando o recebedor chamar `receive`
+    * Pensadas para uso entre processos do sistema
+
+## 2.5.4 - Escalonamento de Processos no MINIX 3
+
+* Sistema de interrupções permite um sistema multiprogramado continuar operando
+  * Processo bloqueiam ao requisitar input
+  * O clock permite que um processo eventualmente libere a CPU
+* Dispositivo de I/O envia mensagem ao completar para acordar o processo e torná-lo executável novamente
+* **Traps**: interrupções geradas por software
+  * `send` e `receive` são traduzidas em instruções de **interrupção de software** equivalentes a interrupções geradas por hardware
+  * Programas de usuário não chamam `send` ou `receive` diretamente mas ao executar uma chamada de sistema, `sendrec` é usada internamente e uma interrupção de software gerada
+* A cada interrupção de processo pode-se redeterminar qual processo merece a oportunidade de executar
+  * Interrupção de processos são mais comuns que o término de um
+
+### Escalonador de MINIX
+
+* Filas multinível
+* 16 filas
+* Menor prioridade é usada pelo processo `IDLE`, executado quando não há mais nada
+* Processos de usuário começam em uma fila vários níveis acima que a menor
+* Servidores em filas de maior prioridade que processos de usuário
+* Drivers em fila de maior prioridade que os servidores
+* Clock e system task na fila de maior prioridade
+* Processo pode alterar de fila de prioridade pelo sistema ou invocação do comando `nice`
+* O quantum não é o mesmo para todos processos
+  * Processos de usuário têm quantum menor
+  * Drivers e servidores devem rodar até bloquear
+    * Porém para evitar mal funcionamento, faz-se eles preemptáveis com quantum bem grande
+      * Processo que esgotou o tempo é considerado pronto e colocado no final de sua fila
+* Se o processo que gastou todo quantum é o mesmo que rodou da última vez, pode ser que ele esteja em loop infinito prevenindo outros processos de menor prioridade de executarem, portanto deve ser colocado em uma fila de menor prioridade
+* Se um processo executou todo quantum mas não está prevenindo a execução de outros, pode ser promovido a uma fila de maior prioridade até a maior prioridade permitida para ele
+* Se um processo não usou todo seu quantum quanto se tornou não pronto, significa que bloqueou por conta de I/O. Quando se torna pronto novamente, é colocado na cabeça da fila com o quantum que sobrou
+* Processo que gasta todo seu quantum ao se tornar não pronto é colocado no final da fila
+* Um processo do sistema não pode deixar de ser executado por conta de um processo de usuário
+* A cada tique do relógio, checa-se se o processo atual executou mais do que seu quantum permitido
+* Drivers e servidores essenciais recebem quantum grande para essencialmente nunca serão preemptados
+  * Suas prioridades podem ser diminuídas caso apresentem problemas
