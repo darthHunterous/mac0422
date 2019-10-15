@@ -2,6 +2,87 @@
 
 
 
+## 2.6.1 - Organização do código do MINIX
+
+* Localização do código em C para plataforma Intel: `/usr/src/`
+* `/usr/src/include`: header dos arquivos em C
+* Cada diretório na árvore do diretório fonte (`src/`) possui um **Makefile**
+* `make`: compilação eficiente de programas com vários arquivos fonte
+  * Garante que todos arquivos necessários são compilados
+  * Recompila apenas arquivos modificados
+  * Direciona a combinação de módulos separados em um programa executável
+* Árvore `src/` pode ser realocada pois o Makefile usa paths relativos aos respectivos diretórios fontes
+  * Diretório fonte na raiz `/src/` para compilação mais rápida se o dispositivo na raiz é um RAM disk
+
+### Path para os headers
+
+* Makefile espera encontrar headers em `/usr/include/`
+* Porém o Makefile para recompilar o sistema `src/tools/Makefile` espera uma cópia dos headers em `/usr/src/include/`
+  * Antes de recompilar, `/usr/include/` é deletado e `/usr/src/include/` é copiado para ele
+* `#include <filename>`: procura por padrão em `/usr/include/`
+* `#include "filename"`: procura primeiro no mesmo diretório que o arquivo fonte (ou subdiretório especificado). Se não encontrar procura no diretório padrão
+
+### Diretório `/usr/src/include/`
+
+* Contém headers padrão do POSIX
+* Três subdiretórios adicionais
+  * `sys/`: headers adicionais do POSIX
+  * `minix/`: headers usados pelo MINIX 3
+  * `ibm/`: headers com definições para IBM-PC
+* Outros arquivos e subdiretórios podem ser inclusos aqui para funcionalidades extras
+  * Extensões de rede: `/usr/src/include/arpa/`, `/usr/src/include/net`, `/usr/src/include/net/gen`
+
+### Subdiretórios adicionais em `/usr/src/`
+
+* Três subdiretórios do SO
+  * `kernel/`: camada 1 (escalonamento, mensagens, clock e system tasks)
+  * `drivers/`: camada 2 (drivers de dispositivos)
+  * `servers/`: camada 3 (gerenciador de processos, sistema de arquivos, etc)
+    * Também programa `init` e servidor de reencarnação `rs`
+    * `/usr/src/servers/inet/`: servidor de rede
+* Diretórios de código fonte adicionais
+  * `/usr/src/lib/`: procedimentos de biblioteca
+  * `/usr/src/tools/`: makefile e script para construção do MINIX
+  * `/usr/src/boot/`: boot e instalação do MINIX
+* `/usr/src/test/`: programas para testar um MINIX 3 recém compilado
+* `/usr/src/commands`: programas utilitários (`cat`, `cp`, `date`, `ls`, `pwd`, mais 200 outros)
+
+### Padrão de nomes de arquivos
+
+* No livro refere-se a nomes simples quando se depreende do contexto o path completo
+  * `const.h` está presente em vários lugares, como `/usr/src/kernel/` e `/usr/src/servers/pm/`
+
+### Camada 01
+
+* System task: interface entre serviços do kernel e processos em camadas superiores
+* Clock task: sinais de tempo para o kernel
+
+## 2.6.2 - Compilando e executando MINIX
+
+* **Compilar**: executar make e `/usr/src/tools/`
+
+  * Sem argumentos: lista argumentos
+  * `make image`: headers em `/usr/src/include/` são copiados para `/usr/include/`
+    * Códigos em `/usr/src/kernel/`, `/usr/src/drivers/*` e `/usr/src/servers/*` são compilados em código objeto
+    * Código objeto do kernel é linkado para formar o executável `kernel`
+      * O mesmo em `/usr/src/servers/pm` para `pm` e `/usr/src/servers/fs` para `fs`
+    * Programas da imagem de boot são compilados e linkados em seus diretórios (`rs`, `init`, etc)
+
+* Para instalar o sistema capaz de ser bootado, `installboot` (código em `/usr/src/boot/`) adiciona nomes aos componentes da imagem de boot, separando-os tal que seu comprimento seja múltiplo do tamanho do setor do disco (facilita carregar partes independentemente), e concatenando em um único arquivo (a imagem de boot, que pode ser copiada para o diretório `/boot/` ou `/boot/image/` de um disquete ou partição)
+
+* **Memória após carregamento da imagem de boot**: 
+
+  * ![](zzz-002-02-06-minix-boot-image-memory.png)
+
+  * O kernel é carregado em valores baixos de memória
+  * Se um programa de usuário cabe na memória disponível logo acima do Kernel, será usado aí, senão será carregado acima do `init`
+
+* MINIX 3 consiste de programas independentes que se comunicam apenas por passagem de mensagem
+
+  * Únicos procedimentos que os 3 componentes do SO têm em comum são as rotinas de biblioteca em `/usr/src/lib/`
+
+
+
 ## 2.6.10 - Escalonamento MINIX 3
 
 * Algoritmo de escalonamento multinível
