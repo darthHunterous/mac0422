@@ -81,7 +81,84 @@
 
   * Únicos procedimentos que os 3 componentes do SO têm em comum são as rotinas de biblioteca em `/usr/src/lib/`
 
+## 2.6.3 - Arquivos de header comuns
 
+* `/usr/src/include/`: contém arquivos definindo constantes, macros e tipos
+* Padrão POSIX define em quais arquivos cada definição necessária deve estar
+* `/usr/src/include/sys/`: arquivos usados para compilar programas e utilitários do sistema
+
+### Header de próposito geral
+
+* Não referenciados diretamente por qualquer dos arquivos fonte em C, incluídos em outros headers
+
+* **Header mestre**: para cada componente principal do MINIX
+
+  * `usr/src/kernel/kernel.h`, `usr/src/servers/pm/pm.h`, `usr/src/servers/fs/fs.h` e `usr/src/drivers/drivers.h`
+
+  * **Exemplo de header mestre**
+
+    * ```c
+      #include <minix/config.h> /* PRECISA ser o primeiro */
+      #include <ansi.h> /* PRECISA ser o segundo */
+      #include <limits.h>
+      #include <errno.h>
+      #include <sys/types.h>
+      #include <minix/const.h>
+      #include <minix/type.h>
+      #include <minix/syslib.h>
+      #include "const.h"
+      ```
+
+      * Headers de vários diretórios usados juntos
+      * `const.h` de dois locais diferentes são usados
+
+### `ansi.h`
+
+* Linha 0000
+* Segundo header processado quando qualquer parte é compilada
+* Testa se o compilador cumpre os requisitos do Padrão de C
+* **Macro de teste de recurso**: `ansi.h` define vários macros de formas diferentes dependendo se o macro `_ANSI` está definido
+  * Outro exemplo é `_POSIX_SOURCE` (linha 0065)
+* Em C, os tipos de dados dos argumentos e valores retornados precisam ser conhecidos antes que tal dados sejam gerados
+  * C permite **protótipos de funções** para **declarar** os tipos dos argumentos e valores de retorno de uma função antes que ela seja **definida**
+  * Macro `_PROTOTYPE`
+    * Para compilador ANSI escrever na forma:
+      * `_PROTOTYPE (return-type function-name, (argument-type argument, ...))`
+      * E transformar em:
+        * `return-type function-name(argument-type, argument, ...)`
+    * Compilador mais antigo é transformado em:
+      * `return-type function-name()`
+* **ifndef**: `#ifndef _ANSI_H` e `#endif` (ou `#endif /* _ANSI_H */`)
+  * `_ANSI_H` é definido na linha logo após o `ifndef`
+  * Um header só deve ser incluído uma vez na compilação
+  * Um underscore precede o nome do arquivo, porém outro header pode existir nos diretórios de código fonte C, usado sem o underscore, não prevenindo o processamento de outro header com o mesmo nome
+  * O comentário após o `endif` é opcional, mas ajuda a identificar seções aninhadas
+
+### `limits.h`
+
+* Linha 0100
+  * Apêndice B começa a contar o código do arquivo seguinte a partir do múltiplo de 100 seguinte
+* Define tamanhos básicos, como tamanho de tipos na linguagem (bits de um inteiro) ou do SO (quantidade de caracteres no nome de arquivo)
+
+###```errno.h```
+
+* Número de erros retornados aos programs de usuário na variável global `errno` quando uma chamada de sistema falha
+* Examinar a variável global seria ineficiente, portanto MINIX retorna o número dos erros como valores negativos para marcar o valor de retorno como código de erro dentro do sistema e depois converter para positivo antes de retornar para programs de usuário
+  * Truque para isso em `#define EPERM (_SIGN 1)` (**linha 0236**)
+    * O header mestre define o macro `_SYSTEM` em cada parte do SO e o mesmo não ocorre na compilação de um programa de usuário
+
+### Headers não usados em todos headers mestres
+
+* `unistd.h`: **linha 0400**
+  * Define várias constantes (maioria necessária por POSIX)
+  * Protótipos de funções C, incluindo para acessar chamadas de sistemas
+  * **Definição de NULL**: `#define NULL ((void *)0)`
+    * POSIX
+* `string.h`: **linha 0600**
+  * Protótipos de funções para manipular strings
+* `signal.h`: **linha 0700**
+  * Nomes padrões de sinais
+  * Protótipos de funções relacionadas a sinais
 
 ## 2.6.10 - Escalonamento MINIX 3
 
