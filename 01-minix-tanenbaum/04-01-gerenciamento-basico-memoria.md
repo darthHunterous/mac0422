@@ -31,3 +31,26 @@
 
 ## 4.1.3 - Realocação e proteção
 
+### Realocação
+
+* Ligador deve saber o endereço que o programa começa na memória
+* **Exemplo**: primeira instrução chama procedimento no endereço absoluto 100
+  * Se o programa estiver no endereço 100K, pulará para memória dentro do SO (endereço 100), precisa-se acessar 100K + 100 na verdade
+* **Solução**: modificar instruções conforme os programas são carregados na memória
+  * Ligador inclui no binário um bitmap explicitando quais palavras do programa são endereços a serem realocados e quais são outros componentes que não devem ser
+
+### Proteção
+
+* Ao usar endereços absolutos não há como evitar que um programa manipule qualquer palavra na memória
+* **Solução IBM**: dividir a memória em blocos de 2KB com um código de 4 bits de proteção e uma chave PSW (Program Status Word) também de 4 bits
+  * Hardware impede que um processo acesse memória que o código de proteção seja diferente da chave PSW
+  * Apenas o SO pode alterar as chaves e códigos
+
+### Solução alternativa: `base` e `limit`
+
+* Registradores
+* **`base`**: registrador com o endereço do início da partição
+* **`limit`**: comprimento da partição
+* Todo endereço gerado tem o valor do registrador base adicionado: `CALL 100` vira `CALL 100K + 100` sem modificar a instrução em si
+* Endereços são checados em relação a `limit` também
+* **Desvantagem**: adição e comparação extra a cada referência à memória
