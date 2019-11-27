@@ -170,7 +170,7 @@
     * Dados são um atributo (fluxo de dados)
     * **Arquivo imediato**: alguns poucos bytes no header do atributo para representar arquivos pequenos
 
-### 5.3.4 - Gerenciamento de espaço em disco
+## 5.3.4 - Gerenciamento de espaço em disco
 
 * Armazenar um arquivo: em bytes consecutivos ou alocados em blocos do disco
   * Em bytes consecutivos, se o arquivo crescer pode ter que se mover para outro local do disco (demorado para disco)
@@ -198,5 +198,108 @@
   * Ao criar arquivo, os blocos são pegos do bloco de ponteiros. Ao acabar, um novo bloco de ponteiros é lido do disco
   * Ao deletar arquivo, seus blocos são adicionados ao bloco de ponteiros na memória principal. Se encher, são escritos no disco
 
-### 5.3.5 - Confiabilidade do sistema de arquivos
+## 5.3.5 - Confiabilidade do sistema de arquivos
+
+* Disquetes geralmente são perfeitos ao saírem da fábrica, mas tendem a desenvolver bad blocks (blocos defeituosos) com o uso. A poeira que entra no drive de disquete também pode danificar um disquete
+* HDs possuem bad blocks de início (caro demais fabricar sem), por isso possuem setores sobrassalentes nas trilhas. Um ponto defeituoso pode ser pulado deixando um vão entre dois setores consecutivos. O controlador faz esse remapeamento automaticamente, sem conhecimento do usuário
+  * Discos SCSI podem fornecer um erro ao remapear um bloco, alertando o usuário para trocar o HD eventualmetne
+  * Solução de software: sistema de arquivos constrói um arquivo contendo todos bad blocks, removendo-os da lista de blocos livres
+
+### Backups
+
+* **Lixeira**: diretório especial para permitir que usuário restaure arquivos que outrora queria deletar mas mudou de ideia
+* Backups levam muito tempo e espaço
+  * Não há necessidade de backup de binários, arquivos temporários e especiais (como `/dev/`)
+* **Backups incrementais**: backup apenas dos arquivos que foram modificados desde o último
+  * Restauração mais complicada: primeiro restaurar o último backup completo depois os incrementais em ordem reversa
+* Os dados podem ser comprimidos antes do backup, mas pontos defeituosos podem prejudicar o algoritmo de descompressão, tornando dados ilegíveis
+* É difícil fazer backup de um sistema de arquivos ativo, pois modificações vão ocorrendo em tempo real. Algoritmos de backup podem tirar snapshots do sistema atual e ao fim do backup requerer modificações em cima disso
+* Backups também geram problemas de segurança físicos: informações sensíveis precisam ser protegidas tanto quanto o original, mas devem estar protegidas de eventos que destruam não só o original quanto o backup (incêndios)
+
+### Copiar disco em fita
+
+* **Duas estratégias**:
+  * **Cópia física**: começa no bloco zero do disco e escreve todos os blocos em ordem na fita de saída
+    * Não há necessidade de copiar blocos livres, porém acessar a estrutura de blocos livres e pulá-los significa que não haverá correlação um pra um dos blocos no disco e na fita, sendo necessário armazenar o número de cada bloco em seu início
+    * Os bad blocks precisam ser evitados também
+    * **Vantagens**: simples e rápida
+    * **Desvantagens**: não é possível evitar o backup de certo diretórios, fazer cópias incrementais e restaurar arquivos individuais
+  * **Cópia lógica**: começa em um diretório e copia todos arquivos recursivamente que foram alterados desde uma data específica
+    * Para restaurar: toda informação para recriar o path do arquivo precisa ser salva, incluindo todos diretórios, até mesmo os não modificados
+    * **Problemas**:
+      * A lista de blocos livres não é copiada e precisa ser reconstruída após uma restauração
+      * Se um arquivo é linkado a vários diretórios, deve ser restaurado apenas uma vez
+      * Arquivos em UNIX podem conter buracos (função seek para pular um offset) e não devem ser copiados e restaurados
+    * Arquivos especiais nunca devem ser copiados
+
+### Consistência dos sistema de arquivos
+
+* Se o sistema crashar antes que blocos modificados sejam escritos de volta no disco, pode gerar inconsistência
+* SOs possuem utilitários para checar a consistência: UNIX com `fsck` e Windows com `chkdsk` (`scandisk` nas versões mais antigas)
+* **Dois tipos de checagem de consistência**
+  * **Consistência de blocos**: duas tabelas com contadores para cada bloco, inicializados em zero
+    * Primeira tabela: quantas vezes cada bloco está presente em um arquivo
+    * Segunda tabela: quantas vezes cada bloco está presente na lista de blocos livres
+    * Se o sistema de arquivos está consistente, cada bloco nas duas tabelas terá valor `1` após o programa checar todos i-nodes e a lista de blocos vazios
+    * **Inconsistências**
+      * Blocos zerados após a checagem são **blocos ausentes**, que desperdiçam espaço, portanto o verificador os adiciona de volta na lista de blocos livres
+      * Blocos duplicados na lista de blocos livres: necessário reconstruir a lista
+      * Bloco duplicado na lista de arquivos: pior cenário. Se um dos arquivos for removido, o bloco duplicado estará ao mesmo tempo em ambas tabelas. Se ambos arquivos forem removidos, constará duas vezes na tabela de blocos livres
+        * Solução: copiar o conteúdo do bloco duplicado em um novo que estava livre e inserir este novo em um dos dois arquivos substituindo o duplicado. Um dos dois arquivos estará com problemas de consistência, mas o sistema de arquivos estará consertado e consistente. (Reportar o usuário sobre o problemas nos arquivos)
+  * **Consistência de diretórios**: tabela de contadores para cada arquivo
+    * Varre toda a árvore aumentando o contador para cada arquivo encontrado
+      * Hard links podem fazer com que um arquivo apareça em mais de um diretório (soft links não interferem)
+      * Ao finalizar a varredura, há uma lista indexada pelo número de i-node contando quantos diretórios contém cada arquivo, que pode ser comparada com a contagem de links no próprio i-node
+      * **Dois tipos de erros**: contagem maior ou menor
+        * Links maior que o número de entradas de diretório: se todos arquivos forem removidos, a contagem ainda será diferente de zero e o i-node não é deletado, gastando espaço em disco. Corrigido ajustando a contagem no i-node para o valor correto
+        * Links menor que o número de entradas de diretório: catastrófico
+          * Ao remover uma entrada de diretório deste arquivo, a contagem de i-node pode chegar a zero ainda havendo pelo menos uma entrada de diretório, que apontará para um i-node não usado (que pode até ser atribuído a outro arquivo em breve)
+          * Solução: forçar a contagem de i-nodes igualar o número de entradas de diretório
+  * As duas checagens podem ser integradas por eficiência (varrer os i-nodes apenas uma vez)
+
+## 5.3.6 - Performance do sistema de arquivos
+
+* A memória é muito mais rápida que o disco, que precisa de otimizações de performance
+
+### Uso de cache
+
+* **Cache de bloco** ou **cache de buffer**: blocos pertencentes ao disco que são mantidos na memória
+* Algoritmos para gerenciar o cache: checar requisições de leitura e ver se o bloco está no cache. Se sim, evita o acesso a disco. Caso contrário, o bloco é lido do disco para o cache e aí utilizado
+  * Para determinar se o bloco está presente no cache pode-se usar uma tabela de hash
+  * Com cache cheio, um bloco tem de ser removido e escrito de volta para o disco se foi modificado. (Similar a paginação, podendo usar os mesmos algoritmos. A diferença é que referência do cache do disco é menos frequente que em paginação, portanto é fácil manter os blocos em LRU na lista ligada)
+  * A lista na tabela de hash é bidirecional e ordenada do menor recentemente usado para o mais no final
+  * LRU agora é alcançável mas não desejável pois se um i-node for modificado no cache, demorará até ser escrito de volta no disco (pois é colocado no final e só será removido ao chegar na frente da lista). Com o sistema crashando, isso causará inconsistência no sistema de arquivo
+  * O ideal é modificar o LRU para que blocos que não serão necessários tão cedo vão na frente da lista para seus buffers serem reusados e blocos que podem ser necessários novamente vão no final da lista
+  * Se o bloco é essencial para a consistência do sistema de arquivos (tudo exceto blocos de dados), deve ser escrito de volta ao disco imediatamente, reduzindo a chance de um crash quebar o sistema de arquivos
+* Para evitar que blocos de dados fiquem no cache por muito tempo, há a chamada de sistema `sync` no UNIX, que escreve todos blocos do cache com modificações para o disco
+  * Programa `update` automaticamente faz chamadas de `sync` a cada 30 segundos
+* No Windows há os **cache de escrita direta** (**write-through**), onde todo bloco modificado é escrito para o disco imediatamente
+* Essa diferença entre Windows e UNIX resulta que remover um disco removível no UNIX sem executar um `sync` resultará em dados perdidos e um sistema de arquivos corrompido, enquanto que no Windows não
+
+### Leitura de bloco antecipada
+
+* Ao ler o bloco `k` de um arquivo, o sistema de arquivos pode já ir pegando o bloco `k+1` para antecipar essa leitura seguinte
+  * Só funciona se a leitura for sequencial, pois em acesso aleatório pode prejudicar a performance, ocupando largura de transferência do disco. A solução é o bit analisado pelo sistema de arquivos que indica se o arquivo está em modo de leitura sequencial ou acesso aleatório
+
+### Reduzindo o movimento do braço do disco
+
+* Usando bitmap para blocos livres, fica fácil escolher blocos livres próximos uns aos outros (preferência no mesmo cilindro)
+* Outro gargalo é que ler um arquivo requer acesso ao i-node e também ao bloco
+  * Colocando todos i-nodes sequencialmente, a distância entre o i-node e seus blocos vai ser de metade do número dos cilindros, tendo grandes seeks
+    * Soluções:
+      * Colocar i-nodes no meio do disco
+      * Dividir o disco em grupos de cilindros, buscando alocar i-nodes, blocos e lista de blocos livres próximos uns aos outros
+
+## 5.3.7 - Sistemas de arquivos estruturados em log
+
+* Gargalo principal é tempo de busca em disco, apesar das melhorias em CPUs e crescimento do tamanho das memórias
+  * Solução: **LFS (Log Structure file system)**
+* Boa parte do trabalho do disco no UNIX são muitas escritas de arquivos pequenos, cujo tempo de execução são dominados pelo atraso
+  * LFS estrutura o disco como um log e periodicamente o cache na memória é juntado em um segmento e escritos para o disco como um único segmento no fim do log
+  * No começo do segmento há um resumo sobre ele
+  * Se o segmento ocupar 1 MB, pode-se utilizar toda a banda do disco
+  * i-nodes agora ficam espalhados pleo disco, mais difícil de encontrar, necessitando de um mapa de i-nodes (mantido no disco e no cache)
+  * Quando o disco enche (pelo log ocupar todo disco), vários segmentos conterão blocos não mais necessários
+    * Resolvido com uma **thread limpadora** que fica varrendo o log e compactando
+    * O disco se torna um grande buffer circula, com a thread que escreve adicionando novos segmentos na frente e a thread limpadora removendo dos fundos
 
